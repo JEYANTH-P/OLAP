@@ -1,0 +1,137 @@
+-- Create the cube extension
+CREATE EXTENSION IF NOT EXISTS cube;
+
+-- Create the region dimension table with hierarchical data
+CREATE TABLE region_dim (
+    region_id SERIAL PRIMARY KEY,
+    region_name VARCHAR(50),
+    parent_region_id INT REFERENCES region_dim(region_id)
+);
+
+-- Insert hierarchical data into the region dimension table
+INSERT INTO region_dim (region_name, parent_region_id) VALUES
+('North', NULL),
+('West', NULL),
+('East', NULL),
+('South', NULL),
+('Tamil Nadu', 4),
+('Chennai', 5),
+('Coimbatore', 5),
+('Madurai', 5),
+('Tiruchirappalli', 5),
+('Salem', 5),
+('Erode', 5),
+('Tiruppur', 5),
+('Vellore', 5),
+('Thoothukudi', 5);
+
+-- Create the time dimension table with hierarchical data
+CREATE TABLE time_dim (
+    time_id SERIAL PRIMARY KEY,
+    year INT,
+    month INT,
+    day INT
+);
+
+-- Insert data into the time dimension table
+INSERT INTO time_dim (year, month, day) VALUES
+(2024, 1, 1),
+(2024, 2, 1),
+(2024, 3, 1),
+(2024, 4, 1),
+(2024, 5, 1),
+(2024, 6, 1),
+(2024, 7, 1),
+(2024, 8, 1),
+(2024, 9, 1),
+(2024, 10, 1),
+(2024, 11, 1),
+(2024, 12, 1);
+
+-- Create the standard dimension table
+CREATE TABLE standard_dim (
+    standard_id SERIAL PRIMARY KEY,
+    standard_name VARCHAR(50)
+);
+
+-- Insert data into the standard dimension table
+INSERT INTO standard_dim (standard_name) VALUES
+('Kindergarten'),
+('Elementary'),
+('10th Standard'),
+('12th Standard');
+
+-- Create the fact table with cube data
+CREATE TABLE student_dropout_fact (
+    id SERIAL PRIMARY KEY,
+    cube_data cube
+);
+
+-- Insert data into the fact table
+INSERT INTO student_dropout_fact (cube_data) VALUES
+(CUBE(ARRAY[1, 1, 1, 100])),
+(CUBE(ARRAY[2, 2, 2, 150])),
+(CUBE(ARRAY[3, 3, 3, 200])),
+(CUBE(ARRAY[4, 4, 4, 250])),
+(CUBE(ARRAY[5, 5, 5, 300])),
+(CUBE(ARRAY[6, 6, 6, 350])),
+(CUBE(ARRAY[7, 7, 7, 400])),
+(CUBE(ARRAY[8, 8, 8, 450])),
+(CUBE(ARRAY[9, 9, 9, 500])),
+(CUBE(ARRAY[10, 10, 10, 550]));
+
+slice
+Query: Slice by region "Chennai" and year 2024
+SELECT
+    r.region_name,
+    t.year,
+    t.month,
+    t.day,
+    s.standard_name,
+    cube_ll_coord(cube_data, 4)::NUMERIC AS no_of_students
+FROM student_dropout_fact
+JOIN region_dim r ON cube_ll_coord(cube_data, 1) = r.region_id
+JOIN time_dim t ON cube_ll_coord(cube_data, 2) = t.time_id
+JOIN standard_dim s ON cube_ll_coord(cube_data, 3) = s.standard_id
+WHERE r.region_name = 'Chennai' AND t.year = 2024;
+
+
+
+
+2. Dice
+Query: Dice by region "Chennai", year 2024, and standard "Kindergarten"
+
+
+
+SELECT
+    r.region_name,
+    t.year,
+    t.month,
+    t.day,
+    s.standard_name,
+    cube_ll_coord(cube_data, 4)::NUMERIC AS no_of_students
+FROM student_dropout_fact
+JOIN region_dim r ON cube_ll_coord(cube_data, 1) = r.region_id
+JOIN time_dim t ON cube_ll_coord(cube_data, 2) = t.time_id
+JOIN standard_dim s ON cube_ll_coord(cube_data, 3) = s.standard_id
+WHERE r.region_name = 'Chennai' AND t.year = 2024 AND s.standard_name = 'Kindergarten';
+
+
+
+
+
+3. Pivot
+Query: Pivot by region and standard
+SELECT
+    r.region_name,
+    s.standard_name,
+    SUM(cube_ll_coord(cube_data, 4)::NUMERIC) AS total_students
+FROM student_dropout_fact
+JOIN region_dim r ON cube_ll_coord(cube_data, 1) = r.region_id
+JOIN standard_dim s ON cube_ll_coord(cube_data, 3) = s.standard_id
+GROUP BY r.region_name, s.standard_name
+ORDER BY r.region_name, s.standard_name;
+
+
+
+
